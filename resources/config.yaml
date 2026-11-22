@@ -1,0 +1,120 @@
+train:
+  device: "cuda"
+  max_epochs: 1000
+  accelerator: "auto"
+  log_every_n_steps: 10
+  save_checkpoint: "/disk/app/checkpoints_boq_dinov2_vit_s_1000_normalized_v2/"
+  check_val_every_n_epoch: 5
+  callback_enabled: true
+  precision: "16-mixed"
+  resume_ckpt_path: null
+  model_checkpoint_callback:
+    monitor_param: "avg_train_loss_epoch"
+    model_ckpt_dir: "/disk/app/checkpoints_boq_dinov2_vit_s_1000_normalized_v2/"
+    model_ckpt_filename: "boq-{epoch:02d}-{avg_train_loss_epoch:.4f}"
+    top_k_model: 1
+    save_last: true
+    mode: "min"
+    verbose: true
+  model_export:
+    transform:
+      input_size: 224
+    coreml_path: "/disk/app/coreml_model/boq_dinov2_vit_s_1000_normalized.mlmodel"
+    pte_model_path: "/disk/app/pytorch_model/boq_dinov2_vit_s_1000_normalized.pte"
+
+model:
+  backbone: "dinov2_vits14"
+  # backbone: "resnet18"
+  aggregator:
+    channel_proj: 256
+    num_queries: 64
+    num_layers: 2
+    row_dim: 4096
+    output_dim: 4096
+    linear_dims: [1024, 1024, 512]
+  learning_rate:
+    lr: 1e-4
+    lr_mul: 0.1
+    weight_decay: 1e-3
+    milestones: [10, 20]
+  warmup_epochs: 10
+  silent: false
+  loss:
+    alpha: 2.0
+    beta: 50.0
+    base: 0.5
+  miner:
+    epsilon: 0.1
+  usearch:
+    metric: "cos"
+    dtype: "f32"
+    embedding_dim: 512
+    top_k: 5
+
+dataloaders:
+  train:
+    dataset:
+      # input_dir: "/disk/dataset/sample_train"
+      input_dir: "/disk/byol_data/upc_data/train_20"
+    train_augmentation:
+      num_augmentations: 7
+      affine:
+        scale: [0.9, 1.1]
+        translate_percent: [0.02, 0.05]
+        rotate: 10
+        p: 1.0
+      horizontal_flip:
+        p: 0.5
+      random_brightness_contrast:
+        brightness_limit: 0.2
+        contrast_limit: 0.2
+        p: 0.5
+      gauss_noise:
+        var_limit: [5.0, 25.0]
+        p: 0.5
+      rotation:
+        degrees: 15
+        p: 0.5
+      perspective:
+        scale: 0.3
+        p: 0.5
+      random_erasing:
+        p: 0.5
+        scale: [0.02, 0.2]
+      compression:
+        height: 256
+        width: 256
+        orig_height: 224
+        orig_width: 224
+    sampler:
+      k: 3
+      n: 5
+    dataloader:
+      batch_size: 16
+      num_workers: 4
+      shuffle: true
+      pin_memory: true
+    transform:
+      size: 224
+
+  val:
+    dataset:
+      candidate_dir: "/disk/dataset/sample_train"
+      query_dir: "/disk/dataset/sample_test"
+    dataloader:
+      batch_size: 8
+      num_workers: 4
+      shuffle: false
+      pin_memory: true
+    transform:
+      size: 224
+
+logging:
+  tensorboard_log_dir: "/disk/app/tb_logs"
+  tensorboard_log_graph: true
+  mlflow:
+    enabled: false
+    tracking_uri: "http://127.0.0.1:8000/"
+    experiment_name: "boq_full_run_16"
+    run_name: "batch_512_full_run_boq_dinov2_vit_s_1000_normalized"
+    system_metrics_enable: "true"
